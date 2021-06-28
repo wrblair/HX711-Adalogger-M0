@@ -1,0 +1,82 @@
+#include <SPI.h>
+#include <SD.h>
+#include "HX711.h"
+
+#define FILE_BASE_NAME "FAST" // max six characters
+#define DOUT_one 10   // Red 
+#define CLK_one  11   // Orange 
+
+const uint8_t CS_PIN = 4;
+const uint8_t BASE_NAME_SIZE = sizeof(FILE_BASE_NAME) - 1;
+
+char fileName[] = FILE_BASE_NAME "00.csv";
+
+float calibration_factor_one = -7050; // needs to be calibrated still
+
+File file;
+
+long startTime=0;
+
+String dataString = "";
+
+double scale_one_value = 0.0;
+
+HX711 scale_one;
+
+void SetUpSDCard(){
+  if (!SD.begin(CS_PIN)) {
+    Serial.println(F("begin failed"));
+    return;
+    }
+   while (SD.exists(fileName)) {
+    if (fileName[BASE_NAME_SIZE + 1] != '9') {
+      fileName[BASE_NAME_SIZE + 1]++;
+    } else if (fileName[BASE_NAME_SIZE] != '9') {
+      fileName[BASE_NAME_SIZE + 1] = '0';
+      fileName[BASE_NAME_SIZE]++;
+    } else {
+      Serial.println(F("Can't create file name"));
+      return;
+    }
+  }
+   file = SD.open(fileName, FILE_WRITE);
+  if (!file) {
+    Serial.println(F("open failed"));
+    return;
+  }
+  Serial.print(F("opened: "));
+  Serial.println(fileName);
+  }
+
+void SetUpLoadCell(){
+  Serial.println("Remove all weight from scale");  
+  scale_one.begin(DOUT_one, CLK_one);
+  scale_one.set_scale();
+  scale_one.tare(); 
+
+  long zero_factor_one = scale_one.read_average(); //Get a baseline reading
+  Serial.print("Zero factor: "); 
+  Serial.println(zero_factor_one);
+  Serial.println("Load cell one initialized");
+  scale_one.set_scale(calibration_factor_one); //Adjust to this calibration factor
+  }
+
+void LogData(){
+  startTime= micros();
+  scale_one_value = scale_one.get_units();
+
+  dataString = String(startTime) + "," + String(scale_one_value);
+  file.println(dataString);
+  file.flush();
+  }
+
+void setup() {
+  Serial.begin(9600);
+  SetUpSDCard();
+  Serial.println("Remove all weight from scale");
+  SetUpLoadCell();
+}
+
+void loop() {
+  LogData();
+}
